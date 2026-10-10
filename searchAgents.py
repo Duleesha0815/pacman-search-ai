@@ -498,8 +498,81 @@ def foodHeuristic(state: Tuple[Tuple, List[List]], problem: FoodSearchProblem):
     problem.heuristicInfo['wallCount']
     """
     position, foodGrid = state
-    "*** YOUR CODE HERE ***"
-    return 0
+    foodList = foodGrid.asList()
+    if not foodList:
+        return 0
+
+    # Cache for all-pairs maze distances computed via BFS
+    if 'distances' not in problem.heuristicInfo:
+        problem.heuristicInfo['distances'] = {}
+    distances = problem.heuristicInfo['distances']
+
+    def get_maze_distance(p1, p2):
+        if p1 == p2:
+            return 0
+        if p1 in distances and p2 in distances[p1]:
+            return distances[p1][p2]
+        if p2 in distances and p1 in distances[p2]:
+            return distances[p2][p1]
+
+        # BFS from p1 to find true maze distances to all reachable positions
+        queue = [p1]
+        visited = {p1: 0}
+        head = 0
+        walls = problem.walls
+        while head < len(queue):
+            cx, cy = queue[head]
+            d = visited[(cx, cy)]
+            head += 1
+            for dx, dy in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+                nx, ny = cx + dx, cy + dy
+                if not walls[nx][ny] and (nx, ny) not in visited:
+                    visited[(nx, ny)] = d + 1
+                    queue.append((nx, ny))
+
+        distances[p1] = visited
+        return visited.get(p2, 999999)
+
+    # Cache for Minimum Spanning Tree (MST) weights over food subsets
+    if 'mstCache' not in problem.heuristicInfo:
+        problem.heuristicInfo['mstCache'] = {}
+    mstCache = problem.heuristicInfo['mstCache']
+
+    foodKey = tuple(sorted(foodList))
+    if foodKey in mstCache:
+        mstWeight = mstCache[foodKey]
+    else:
+        # Compute MST weight over food positions using Prim's algorithm
+        if len(foodList) <= 1:
+            mstWeight = 0
+        else:
+            unvisited = set(foodList)
+            start = foodList[0]
+            unvisited.remove(start)
+            minDist = {v: get_maze_distance(start, v) for v in unvisited}
+            mstWeight = 0
+            while unvisited:
+                u = min(unvisited, key=lambda v: minDist[v])
+                mstWeight += minDist[u]
+                unvisited.remove(u)
+                for v in unvisited:
+                    d = get_maze_distance(u, v)
+                    if d < minDist[v]:
+                        minDist[v] = d
+        mstCache[foodKey] = mstWeight
+
+    # Maze distances from Pacman's current position to each remaining food dot
+    pacmanToFoodDistances = [get_maze_distance(position, food) for food in foodList]
+
+    # h1: Distance to the farthest food dot (admissible and consistent)
+    h1 = max(pacmanToFoodDistances)
+
+    # h2: Distance to the closest food dot + weight of MST spanning all remaining food
+    # (standard 1-tree relaxation for TSP; admissible and consistent)
+    h2 = min(pacmanToFoodDistances) + mstWeight
+
+    # Pointwise maximum of two consistent heuristics is guaranteed consistent and admissible
+    return max(h1, h2)
 
 class ClosestDotSearchAgent(SearchAgent):
     "Search for all food using a sequence of searches"
