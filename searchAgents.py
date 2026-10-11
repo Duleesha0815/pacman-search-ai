@@ -379,32 +379,22 @@ def cornersHeuristic(state: Any, problem: CornersProblem):
     if not unvisitedCorners:
         return 0
 
-    def manhattanDistance(point1, point2):
-        return (
-            abs(point1[0] - point2[0])
-            + abs(point1[1] - point2[1])
-        )
+    import itertools
 
-    currentPosition = position
-    remainingCorners = list(unvisitedCorners)
-    totalDistance = 0
-
-    while remainingCorners:
-        nearestCorner = min(
-            remainingCorners,
-            key=lambda corner: manhattanDistance(
-                currentPosition, corner
+    minDistance = float('inf')
+    for perm in itertools.permutations(unvisitedCorners):
+        currentPosition = position
+        currentDistance = 0
+        for corner in perm:
+            currentDistance += (
+                abs(currentPosition[0] - corner[0])
+                + abs(currentPosition[1] - corner[1])
             )
-        )
+            currentPosition = corner
+        if currentDistance < minDistance:
+            minDistance = currentDistance
 
-        totalDistance += manhattanDistance(
-            currentPosition, nearestCorner
-        )
-
-        currentPosition = nearestCorner
-        remainingCorners.remove(nearestCorner)
-
-    return totalDistance
+    return minDistance
 
 
 class AStarCornersAgent(SearchAgent):
